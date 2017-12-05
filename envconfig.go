@@ -170,6 +170,7 @@ func readStruct(value reflect.Value, ctx *context) (nonNil bool, err error) {
 				field.Set(reflect.New(field.Type().Elem()))
 				parents = append(parents, field) // track parent pointers to deallocate if no children are filled in
 			}
+
 			field = field.Elem()
 			goto doRead
 		case reflect.Struct:
@@ -200,11 +201,11 @@ func readStruct(value reflect.Value, ctx *context) (nonNil bool, err error) {
 		if err != nil {
 			return false, err
 		}
-	}
 
-	if !nonNil && ctx.leaveNil { // re-zero
-		for _, p := range parents {
-			p.Set(reflect.Zero(p.Type()))
+		if !nonNil && ctx.leaveNil { // re-zero
+			for _, p := range parents {
+				p.Set(reflect.Zero(p.Type()))
+			}
 		}
 	}
 
