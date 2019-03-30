@@ -39,6 +39,29 @@ func TestParseSimpleConfig(t *testing.T) {
 	os.Setenv("LOG_PATH", "")
 }
 
+func TestWithCallback(t *testing.T) {
+	var conf struct {
+		Name string `envconfig:"default=alice"`
+	}
+
+	callback := func(s string) string {
+		if s == "NAME" {
+			return "bob"
+		}
+		return ""
+	}
+
+	err := envconfig.InitWithOptionsAndCallback(&conf, envconfig.Options{}, callback)
+	require.Nil(t, err)
+
+	require.Equal(t, "bob", conf.Name)
+
+	err = envconfig.InitWithOptionsAndCallback(&conf, envconfig.Options{}, nil)
+	require.Nil(t, err)
+
+	require.Equal(t, "alice", conf.Name)
+}
+
 func TestParseIntegerConfig(t *testing.T) {
 	var conf struct {
 		Port    int

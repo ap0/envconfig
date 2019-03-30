@@ -31,6 +31,7 @@ type context struct {
 	parents            []reflect.Value
 	optional, leaveNil bool
 	allowUnexported    bool
+	callback           func(string) string
 }
 
 // Unmarshaler is the interface implemented by objects that can unmarshal
@@ -85,9 +86,11 @@ func InitWithPrefix(conf interface{}, prefix string) error {
 	return InitWithOptions(conf, Options{Prefix: prefix})
 }
 
-// InitWithOptions reads the configuration from environment variables and populates the conf object.
+// InitWithOptionsAndCallback reads the configuration from environment variables and and populates the conf object.
 // conf must be a pointer.
-func InitWithOptions(conf interface{}, opts Options) error {
+// If set, callback will be called with all name variations of each struct member, and should return
+// a value appropriate for the given key, or empty string of unknown.
+func InitWithOptionsAndCallback(conf interface{}, opts Options, callback func(string) string) error {
 	value := reflect.ValueOf(conf)
 	if value.Kind() != reflect.Ptr {
 		return ErrNotAPointer
@@ -100,6 +103,7 @@ func InitWithOptions(conf interface{}, opts Options) error {
 		optional:        opts.AllOptional,
 		leaveNil:        opts.LeaveNil,
 		allowUnexported: opts.AllowUnexported,
+		callback:        callback,
 	}
 	switch elem.Kind() {
 	case reflect.Ptr:
@@ -114,6 +118,12 @@ func InitWithOptions(conf interface{}, opts Options) error {
 	default:
 		return ErrInvalidValueKind
 	}
+}
+
+// InitWithOptions reads the configuration from environment variables and populates the conf object.
+// conf must be a pointer.
+func InitWithOptions(conf interface{}, opts Options) error {
+	return InitWithOptionsAndCallback(conf, opts, nil)
 }
 
 type tag struct {
@@ -179,6 +189,7 @@ func readStruct(value reflect.Value, ctx *context) (nonNil bool, err error) {
 				parents:         parents,
 				leaveNil:        ctx.leaveNil,
 				allowUnexported: ctx.allowUnexported,
+				callback:        ctx.callback,
 			})
 			nonNil = nonNil || nonNilIn
 		default:
@@ -191,6 +202,7 @@ func readStruct(value reflect.Value, ctx *context) (nonNil bool, err error) {
 				parents:         parents,
 				leaveNil:        ctx.leaveNil,
 				allowUnexported: ctx.allowUnexported,
+				callback:        ctx.callback,
 			})
 			nonNil = nonNil || ok
 		}
@@ -425,8 +437,18 @@ func readValue(ctx *context) (string, error) {
 
 	var str string
 
+	if ctx.callback != nil {
+		for _, key := range keys {
+			str = ctx.callback(key)
+			if str != "" {
+				return str, nil
+			}
+		}
+	}
+
 	for _, key := range keys {
 		str = os.Getenv(key)
+
 		if str != "" {
 			break
 		}
